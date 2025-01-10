@@ -24,53 +24,37 @@ export class OpenAIController {
 
     // Consultar los slots disponibles según los filtros
     const slots = await this.slotService.searchSlots(
+      filters.lawyerSpeciality, // Nuevo filtro
       filters.lawyerId,
       filters.available,
       filters.startDate,
       filters.endDate,
     );
 
-    const targetTime = filters.targetTime ? new Date(filters.targetTime) : null;
-    let exactSlot = null;
-    let closestSlot = null;
-    let closestTimeDifference = Infinity;
-
-    slots.forEach((slot) => {
-      const slotStart = new Date(slot.dateStart);
-      const slotEnd = new Date(slot.dateEnd);
-
-      if (targetTime && slotStart <= targetTime && slotEnd > targetTime) {
-        exactSlot = slot;
-      }
-
-      if (targetTime && slotStart > targetTime) {
-        const timeDifference = slotStart.getTime() - targetTime.getTime();
-        if (timeDifference < closestTimeDifference) {
-          closestTimeDifference = timeDifference;
-          closestSlot = slot;
-        }
-      }
-    });
-
+    // Crear texto con los resultados
     let slotsText;
-    if (exactSlot) {
-      slotsText = `### Slots Disponibles:\n\n- **Abogado ID**: ${exactSlot.lawyerId}\n  - **Fecha**: ${exactSlot.dateStart.toLocaleDateString()}\n  - **Hora**: ${exactSlot.dateStart.toLocaleTimeString()} - ${exactSlot.dateEnd.toLocaleTimeString()}`;
-    } else if (closestSlot) {
-      slotsText = `### No hay slots exactos disponibles:\n\n- **Slot más cercano**:\n  - **Abogado ID**: ${closestSlot.lawyerId}\n  - **Fecha**: ${closestSlot.dateStart.toLocaleDateString()}\n  - **Hora**: ${closestSlot.dateStart.toLocaleTimeString()} - ${closestSlot.dateEnd.toLocaleTimeString()}`;
+    if (slots.length > 0) {
+      slotsText = slots
+        .map(
+          (slot) =>
+            `- Fecha: ${slot.dateStart.toLocaleDateString()} ${slot.dateStart.toLocaleTimeString()} - ${slot.dateEnd.toLocaleTimeString()}\n` +
+            `  Abogado: ${slot.lawyer.firstName} ${slot.lawyer.secondName} (${slot.lawyer.speciality})`,
+        )
+        .join('\n');
     } else {
-      slotsText = `### No hay slots disponibles para los criterios indicados.`;
+      slotsText = `No hay slots disponibles según los criterios indicados.`;
     }
 
     const prompt = `
-### Pregunta del Humano:
-${humanMessage}
-
-### Resultados de la Base de Datos:
-${slotsText}
-
-### Instrucción:
-Responde al usuario en formato Markdown, utilizando listas desordenadas para organizar los datos si hay múltiples resultados.
-`;
+  ### Pregunta del Humano:
+  ${humanMessage}
+  
+  ### Resultados de la Base de Datos:
+  ${slotsText}
+  
+  ### Instrucción:
+  Responde al usuario en formato Markdown, utilizando listas desordenadas para organizar los datos si hay múltiples resultados.
+  `;
 
     // Configuración de headers para streaming
     res.setHeader('Content-Type', 'text/event-stream');
@@ -85,8 +69,10 @@ Responde al usuario en formato Markdown, utilizando listas desordenadas para org
     res.end(); // Finalizar la transmisión
   }
 
+  // src/openAI/openAI.controller.ts
   private extractFiltersFromMessage(message: string): {
     lawyerId?: number;
+    lawyerSpeciality?: string;
     available?: boolean;
     startDate?: string;
     endDate?: string;
@@ -94,6 +80,11 @@ Responde al usuario en formato Markdown, utilizando listas desordenadas para org
   } {
     const lawyerMatch = message.match(/abogado con el ID (\d+)/);
     const lawyerId = lawyerMatch ? parseInt(lawyerMatch[1]) : undefined;
+
+    const specialityMatch = message.match(/especializado en ([\w\s]+)/i);
+    const lawyerSpeciality = specialityMatch
+      ? specialityMatch[1].trim()
+      : undefined;
 
     const targetTimeMatch = message.match(/\d{1,2}:\d{2}/);
     const targetTime = targetTimeMatch ? targetTimeMatch[0] : undefined;
@@ -103,6 +94,7 @@ Responde al usuario en formato Markdown, utilizando listas desordenadas para org
 
     return {
       lawyerId,
+      lawyerSpeciality, // Incluir especialidad
       available: true,
       startDate,
       endDate,

@@ -12,12 +12,12 @@ export class Slot {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => Lawyer)
+  @ManyToOne(() => Lawyer, { nullable: false }) // Relación con la tabla de abogados
   @JoinColumn({ name: 'lawyerId' })
   lawyer: Lawyer;
 
   @Column({ type: 'int' })
-  lawyerId: number;
+  lawyerId: number; // Clave foránea
 
   @Column({ type: 'datetime' })
   dateStart: Date;

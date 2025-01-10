@@ -26,17 +26,24 @@ export class SlotController {
 
   @Get('search')
   async search(
-    @Query('lawyerId') lawyerId?: number,
-    @Query('available') available?: string, // `available` como string
+    @Query('lawyerId') lawyerId?: string, // `lawyerId` llega como string desde la query
+    @Query('available') available?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('lawyerSpeciality') lawyerSpeciality?: string, // Filtro adicional por especialidad
   ) {
     return await this.slotService.searchSlots(
-      lawyerId ? +lawyerId : undefined,
+      lawyerSpeciality, // Nueva propiedad
+      lawyerId ? parseInt(lawyerId, 10) : undefined, // Convertir a número
       available !== undefined ? available === 'true' : undefined, // Convertir string a boolean
       startDate,
       endDate,
     );
+  }
+
+  @Get('group-by-date')
+  async groupSlotsByDate() {
+    return await this.slotService.groupSlotsByDate();
   }
 
   @Get()
@@ -68,5 +75,10 @@ export class SlotController {
   async remove(@Param('id') id: number) {
     await this.slotService.remove(id);
     return { message: `Slot con ID ${id} eliminado.` };
+  }
+
+  @Post('create-multiple')
+  async createMultiple(@Body() createSlotDtos: CreateSlotDto[]) {
+    return await this.slotService.createMultiple(createSlotDtos);
   }
 }

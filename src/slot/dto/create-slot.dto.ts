@@ -1,10 +1,4 @@
-import {
-  IsDateString,
-  IsInt,
-  IsNotEmpty,
-  IsBoolean,
-  IsOptional,
-} from 'class-validator';
+import { IsDateString, IsInt, IsNotEmpty, IsBoolean } from 'class-validator';
 
 export class CreateSlotDto {
   @IsInt()
@@ -13,13 +7,12 @@ export class CreateSlotDto {
 
   @IsDateString()
   @IsNotEmpty()
-  dateStart: string; // Cadena ISO
+  dateStart: string;
 
   @IsDateString()
   @IsNotEmpty()
-  dateEnd: string; // Cadena ISO
+  dateEnd: string;
 
   @IsBoolean()
-  @IsOptional()
-  available?: boolean = true;
+  available: boolean;
 }

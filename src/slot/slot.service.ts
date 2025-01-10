@@ -172,25 +172,38 @@ export class SlotService {
     };
   }
 
+  // src/slot/slot.service.ts
   async searchSlots(
+    lawyerSpeciality?: string, // Nueva propiedad
     lawyerId?: number,
     available?: boolean,
     startDate?: string,
     endDate?: string,
   ): Promise<Slot[]> {
-    const query = this.slotRepository.createQueryBuilder('slot');
+    const query = this.slotRepository
+      .createQueryBuilder('slot')
+      .leftJoinAndSelect('slot.lawyer', 'lawyer'); // Unir con la tabla de abogados
 
     if (lawyerId) {
-      query.andWhere('slot.lawyerId = :lawyerId', { lawyerId });
+      query.andWhere('lawyer.id = :lawyerId', { lawyerId });
     }
+
+    if (lawyerSpeciality) {
+      query.andWhere('lawyer.speciality = :lawyerSpeciality', {
+        lawyerSpeciality,
+      });
+    }
+
     if (available !== undefined) {
       query.andWhere('slot.available = :available', { available });
     }
+
     if (startDate) {
       query.andWhere('slot.dateStart >= :startDate', {
         startDate: new Date(startDate),
       });
     }
+
     if (endDate) {
       query.andWhere('slot.dateEnd <= :endDate', {
         endDate: new Date(endDate),
@@ -198,5 +211,128 @@ export class SlotService {
     }
 
     return await query.getMany();
+  }
+
+  // async searchSlots(
+  //   lawyerId?: number,
+  //   available?: boolean,
+  //   startDate?: string,
+  //   endDate?: string,
+  // ): Promise<
+  //   {
+  //     dateStart: Date;
+  //     dateEnd: Date;
+  //     available: boolean;
+  //     lawyer: {
+  //       id: number;
+  //       firstName: string;
+  //       secondName: string;
+  //       speciality: string;
+  //     };
+  //   }[]
+  // > {
+  //   const query = this.slotRepository
+  //     .createQueryBuilder('slot')
+  //     .leftJoinAndSelect('slot.lawyer', 'lawyer'); // Incluir relación con lawyer
+
+  //   if (lawyerId) {
+  //     query.andWhere('slot.lawyerId = :lawyerId', { lawyerId });
+  //   }
+  //   if (available !== undefined) {
+  //     query.andWhere('slot.available = :available', { available });
+  //   }
+  //   if (startDate) {
+  //     query.andWhere('slot.dateStart >= :startDate', {
+  //       startDate: new Date(startDate),
+  //     });
+  //   }
+  //   if (endDate) {
+  //     query.andWhere('slot.dateEnd <= :endDate', {
+  //       endDate: new Date(endDate),
+  //     });
+  //   }
+
+  //   const slots = await query.getMany();
+
+  //   // Formatear el resultado para incluir detalles del abogado
+  //   return slots.map((slot) => ({
+  //     dateStart: slot.dateStart,
+  //     dateEnd: slot.dateEnd,
+  //     available: slot.available,
+  //     lawyer: {
+  //       id: slot.lawyer.id,
+  //       firstName: slot.lawyer.firstName,
+  //       secondName: slot.lawyer.secondName,
+  //       speciality: slot.lawyer.speciality,
+  //     },
+  //   }));
+  // }
+
+  async createMultiple(createSlotDtos: CreateSlotDto[]): Promise<Slot[]> {
+    const slots: Slot[] = [];
+    for (const dto of createSlotDtos) {
+      const { lawyerId, dateStart, dateEnd } = dto;
+
+      // Validar fechas y abogado
+      const startDate = new Date(dateStart);
+      const endDate = new Date(dateEnd);
+      const existingSlot = await this.slotRepository.findOne({
+        where: { lawyerId, dateStart: startDate, dateEnd: endDate },
+      });
+
+      if (existingSlot) {
+        throw new BadRequestException(
+          `Ya existe un slot para el abogado con ID ${lawyerId} en la fecha ${startDate}.`,
+        );
+      }
+
+      const slot = this.slotRepository.create({
+        lawyerId,
+        dateStart: startDate,
+        dateEnd: endDate,
+        available: dto.available,
+      });
+      slots.push(await this.slotRepository.save(slot));
+    }
+    return slots;
+  }
+
+  async groupSlotsByDate(): Promise<
+    {
+      dateStart: string;
+      dateEnd: string;
+      lawyers: {
+        id: number;
+        firstName: string;
+        secondName: string;
+        speciality: string;
+      }[];
+    }[]
+  > {
+    const slots = await this.slotRepository.find({
+      relations: ['lawyer'], // Incluye la relación con los abogados
+      order: { dateStart: 'ASC' }, // Ordenar por fecha de inicio
+    });
+
+    // Agrupar los slots por fecha
+    const groupedSlots = slots.reduce((acc, slot) => {
+      const key = `${slot.dateStart}-${slot.dateEnd}`;
+      if (!acc[key]) {
+        acc[key] = {
+          dateStart: slot.dateStart,
+          dateEnd: slot.dateEnd,
+          lawyers: [],
+        };
+      }
+      acc[key].lawyers.push({
+        id: slot.lawyer.id,
+        firstName: slot.lawyer.firstName,
+        secondName: slot.lawyer.secondName,
+        speciality: slot.lawyer.speciality,
+      });
+      return acc;
+    }, {});
+
+    return Object.values(groupedSlots);
   }
 }
